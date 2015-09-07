@@ -7,12 +7,13 @@
 
 //Includes
 #include "LedControlMS.h"
-#include <dht.h>
+#include <OneWire.h> // http://www.pjrc.com/teensy/arduino_libraries/OneWire.zip
+#include <DallasTemperature.h> // http://download.milesburton.com/Arduino/MaximTemperature/DallasTemperature_LATEST.zip
 #include <NewRemoteReceiver.h>
 
 //Define pins
 #define NBR_MTX 2 // number of 8x8 displays
-#define DHT11_PIN 8 // DHT11 pin
+#define ONE_WIRE_BUS 8 // DS18B20 PIN
 #define ledPinR 5    // Red LED connected to digital pin 5
 #define ledPinB 9    // Blue LED connected to digital pin 9
 #define ledPinG 6    // Green LED connected to digital pin 6
@@ -20,7 +21,9 @@ LedControl lc=LedControl(12,11,10, NBR_MTX); // DataIn,CLK,LOAD, number of displ
 
 // Variables
 int NIGHT = 0;      // 0 daytime, 1 Night mode
-dht DHT;
+OneWire oneWire(ONE_WIRE_BUS); // Setup a oneWire instance
+DallasTemperature sensors(&oneWire); // Pass our oneWire reference to Dallas Temperature
+DeviceAddress insideThermometer;
 
 // 1 = enable debug, 0 = disable debug
 boolean debug = 1;
@@ -35,6 +38,26 @@ void setup() {
   lc.setIntensity(1,8);// sets brightness (0~15 possible values)
   lc.clearDisplay(0);// clear screen just in case
   lc.clearDisplay(1);// clear screen just in case
+  
+  
+    //start up temp sensor
+    sensors.begin();   
+    sensors.getAddress(insideThermometer, 0);
+    int reso = sensors.getResolution(insideThermometer);
+    if (reso != 12) {
+      if (debug) {
+        Serial.print("Resolution of DS18B20 is not 12 but ");
+        Serial.print(reso);
+        Serial.print(" changing to 12\n");
+      }
+      sensors.setResolution(insideThermometer, 12);
+      if (debug) {
+        Serial.print("Done\n");
+      }
+    }    
+  
+  
+  
   }
 
 
@@ -43,18 +66,20 @@ void loop() {
   if (NIGHT == 0) {
     lc.shutdown(0,false);
     lc.shutdown(1,false);
-    int chk = DHT.read11(DHT11_PIN);
-          if (debug)  {
-                Serial.println(chk);
-                      }
-      switch (chk)
-              {
-                case DHTLIB_OK:
-                float humfloat = DHT.temperature;
-                int temperature = humfloat - 2;
+
+                // Read DS18B20 and transmit value as sensor 1
+                 float temperaturefloat;
+                 sensors.begin(); //start up temp sensor
+                 sensors.requestTemperatures(); // Get the temperature
+                 temperaturefloat = sensors.getTempCByIndex(0); // Get temperature in Celcius
+
+                 
+                int temperature = temperaturefloat;
                 int   ones = (temperature%10); // extract ones from temperature
                 int tens = ((temperature/10)%10); // extract tens from temperature
                   if (debug) {
+                              Serial.print("Original Temp: ");
+                              Serial.println(temperaturefloat);
                               Serial.print("Temp: ");
                               Serial.println(temperature);
                               Serial.print("Ones: ");
@@ -68,8 +93,7 @@ void loop() {
                 lc.displayChar(1 , temp2);
                 delay(10000);
                 // lc.clearAll();
-                break;
-              }
+              
   }
   if (debug) {
               Serial.print("Nightmode: ");
